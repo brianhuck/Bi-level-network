@@ -1,0 +1,71 @@
+Set
+  i  nodes /1*6/
+  p  nodes_p /1*6/;  
+
+Alias (i,j);
+Alias (p,q);
+
+Set
+  arcs_w(i,j) /1.3, 1.4, 3.5, 3.6, 4.5, 5.2, 6.2/
+  arcs_p(p,q) /1.3, 3.4, 4.5, 4.6, 5.2, 6.2/;
+  
+Parameters
+* adjust node 3.6 for sensitivity analysis
+  u_w(i,j)  'upper bound for water flow on arc (i,j)'
+            /1.3 15, 1.4 4, 3.5 5, 3.6 10, 4.5 4, 5.2 8, 6.2 10/
+* adjust node 4.5 for sensitivity analysis            
+  u_p(p,q)  'upper bound for power flow on arc (i,j)'
+            /1.3 20, 3.4 20, 4.5 10, 4.6 10, 5.2 10, 6.2 10/
+          
+  b_p(p)  'power supply/demand at node i'
+          /5 -10/
+          
+  b_w(i)  'water supply/demand at node p'
+          /6 -10/;
+
+Positive Variable 
+  x(i,j)  'water flow on arc (i,j)'
+  y(p,q)  'power flow on arc (p,q)'
+  w       'max water flow variable'
+  v       'max power flow variable';
+  
+Variable
+  z       'objective function value';
+  
+Equations
+  objfn              'objective function'
+  consflow_w(i)      'conservation of flow'
+  sinkflow_w         'water flow into final node'
+  sourceflow_w       'water flow from first node'
+  restrictor_w(j)    'restricts flow due to demand not met'
+  upperbnd_w(i,j)    'upper bounds on water arcs'
+
+  consflow_p(p)      'conservation of flow'
+  sinkflow_p         'power flow into final node'
+  sourceflow_p       'power flow from first node'
+  restrictor_p(q)    'restricts flow due to demand not met'
+  upperbnd_p(p,q)    'upper bounds on power arcs';
+  
+objfn..                          z=e=w+v;
+
+*   water network constraints
+consflow_w(i)$(ord(i)>2)..        sum(j$arcs_w(i,j),x(i,j))-sum(j$arcs_w(j,i),x(j,i))=e=0;
+sinkflow_w..                      sum(j$arcs_w('2',j),x('2',j))-sum(j$arcs_w(j,'2'),x(j,'2'))=e=-w;
+sourceflow_w..                    sum(j$arcs_w('1',j),x('1',j))-sum(j$arcs_w(j,'1'),x(j,'1'))=e=w;
+restrictor_w(j)$arcs_w('5',j)..   x('5',j)+u_w('5',j)/b_p('5')*sum(p$arcs_p(p,'5'),y(p,'5'))=l=0;
+upperbnd_w(i,j)$arcs_w(i,j)..     x(i,j)=l=u_w(i,j);
+
+*   power network constraints
+consflow_p(p)$(ord(p)>2)..        sum(q$arcs_p(p,q),y(p,q))-sum(q$arcs_p(q,p),y(q,p)) =e= 0;
+sinkflow_p..                      sum(q$arcs_p('2',q),y('2',q))-sum(q$arcs_p(q,'2'),y(q,'2'))=e=-v;
+sourceflow_p..                    sum(q$arcs_p('1',q),y('1',q))-sum(q$arcs_p(q,'1'),y(q,'1'))=e=v;
+restrictor_p(q)$arcs_p('3',q)..   y('3',q)+u_p('3',q)/b_w('6')*sum(i$arcs_w(i,'6'),x(i,'6'))=l=0;              
+upperbnd_p(p,q)$arcs_p(p,q)..     y(p,q)=l=u_p(p,q);
+
+Option
+  lp=cplex
+  reslim=10;
+Model MF / all /;
+Solve MF maximizing z using lp;
+Display z.l, x.l, y.l, w.l, v.l;
+Display MF.resusd;
